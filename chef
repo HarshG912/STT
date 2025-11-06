@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chef Dashboard</title>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f6f8fa;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    #ordersContainer {
+      display: grid;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .order-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .order-card h3 {
+      margin: 0 0 8px;
+    }
+    .order-card p {
+      margin: 4px 0;
+    }
+    button {
+      padding: 8px 14px;
+      margin: 6px 5px 0 0;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .accept-btn { background: #4CAF50; }
+    .start-btn { background: #2196F3; }
+    .complete-btn { background: #9C27B0; }
+    .disabled-btn { background: #9e9e9e; cursor: not-allowed; }
+
+    /* Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 34px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #4CAF50;
+    }
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #333;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <h1>Chef Dashboard</h1>
+  <div id="ordersContainer">Loading orders...</div>
+  <div id="toast" class="toast"></div>
+
+  <script>
+  const sheetId = "1mWGBvhWWcvxpwUfqzbWXTlAzWrNy9gUAFywC571rCZ0";
+  const n8nWebhook = "https://n8n.srv1090344.hstgr.cloud/webhook/udate-status";
+  const ordersContainer = document.getElementById("ordersContainer");
+  const toast = document.getElementById("toast");
+
+  let orders = [];
+
+  function showToast(msg) {
+    toast.innerText = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2000);
+  }
+
+  async function fetchOrders() {
+    try {
+      const res = await fetch(`https://opensheet.elk.sh/${sheetId}/Orders`);
+      const data = await res.json();
+      orders = data.map(o => ({
+        id: o["Order ID"],
+        items: o["Items"],
+        total: o["Total"],
+        status: (o["Status"] || "pending").toLowerCase(),
+        paid: (o["Payment status"] || "").toLowerCase() === "paid"
+      }));
+      renderOrders();
+    } catch (err) {
+      console.error("Error fetching sheet:", err);
+      ordersContainer.innerHTML = "<p>Failed to load orders.</p>";
+    }
+  }
+
+  async function sendUpdate(orderId, newStatus, paidValue) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Construct unified payload
+    const payload = {
+      orderId: orderId,
+      status: newStatus ? newStatus : order.status,
+      paid: paidValue !== undefined ? (paidValue ? "Paid" : "") : (order.paid ? "Paid" : "")
+    };
+
+    console.log("📦 Sending payload to webhook:", payload);
+
+    try {
+      const res = await fetch(n8nWebhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        // Update local state for smoother UI
+        if (newStatus) order.status = newStatus;
+        if (paidValue !== undefined) order.paid = paidValue;
+
+        renderOrders();
+        showToast(`Order ${orderId} updated → ${order.status}${order.paid ? " (Paid)" : ""}`);
+      } else {
+        showToast("Webhook update failed");
+      }
+    } catch (err) {
+      console.error("Webhook error:", err);
+      showToast("Network error");
+    }
+  }
+
+  function updateOrderStatus(orderId, status) {
+    // immediately disable button and update local state to avoid reverting
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    order.status = status;
+    renderOrders();
+    sendUpdate(orderId, status);
+  }
+
+  function togglePaid(orderId, checked) {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    order.paid = checked;
+    renderOrders();
+    sendUpdate(orderId, null, checked);
+  }
+
+  function renderOrders() {
+    ordersContainer.innerHTML = "";
+    if (!orders.length) {
+      ordersContainer.innerHTML = "<p>No orders found.</p>";
+      return;
+    }
+
+    orders.forEach(order => {
+      const card = document.createElement("div");
+      card.className = "order-card";
+
+      let buttonsHTML = "";
+      if (order.status === "pending") {
+        buttonsHTML = `<button class="accept-btn" onclick="updateOrderStatus('${order.id}','accepted')">Accept</button>`;
+      } else if (order.status === "accepted") {
+        buttonsHTML = `<button class="start-btn" onclick="updateOrderStatus('${order.id}','started')">Start Cooking</button>`;
+      } else if (order.status === "started") {
+        buttonsHTML = `<button class="complete-btn" onclick="updateOrderStatus('${order.id}','completed')">Completed</button>`;
+      } else if (order.status === "completed") {
+        buttonsHTML = `<button class="disabled-btn" disabled>Completed</button>`;
+      }
+
+      const paidToggle = `
+        <label class="switch">
+          <input type="checkbox" ${order.paid ? "checked" : ""} onchange="togglePaid('${order.id}', this.checked)">
+          <span class="slider"></span>
+        </label>
+      `;
+
+      card.innerHTML = `
+        <h3>Order ID: ${order.id}</h3>
+        <p><strong>Items:</strong> ${order.items}</p>
+        <p><strong>Total:</strong> ₹${order.total}</p>
+        <p><strong>Status:</strong> ${order.status}</p>
+        ${buttonsHTML}
+        <p><strong>Paid:</strong> ${paidToggle}</p>
+      `;
+
+      ordersContainer.appendChild(card);
+    });
+  }
+
+  fetchOrders();
+  setInterval(fetchOrders, 10000);
+</script>
+
+
+</body>
+</html>
