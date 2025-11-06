@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Restaurant Menu</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Restaurant Menu</h1>
+  <div class="filters">
+    <select id="categoryFilter">
+      <option value="All">All Categories</option>
+    </select>
+    <a href="cart.html" class="cart-link">🛒 View Cart (<span id="cartCount">0</span>)</a>
+  </div>
+  <div id="menu" class="menu">Loading...</div>
+
+  <script>
+    const SHEET_URL = "https://opensheet.elk.sh/1ZG9cnGg7q_uowBsDU_wDTx7mwMxAh-jH7PH-YQmslVA/MenuSheet";
+    const menuContainer = document.getElementById("menu");
+    const categorySelect = document.getElementById("categoryFilter");
+    const cartCount = document.getElementById("cartCount");
+
+    let menuData = [];
+    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+
+    function updateCartCount() {
+      cartCount.textContent = cart.reduce((sum, item) => sum + item.qty, 0);
+    }
+
+    async function loadMenu() {
+      try {
+        const res = await fetch(SHEET_URL);
+        menuData = await res.json();
+        populateCategories(menuData);
+        renderMenu(menuData);
+        updateCartCount();
+      } catch (err) {
+        menuContainer.textContent = "⚠️ Error loading menu.";
+        console.error(err);
+      }
+    }
+
+    function populateCategories(data) {
+      const categories = [...new Set(data.map(i => i.Category).filter(Boolean))];
+      categories.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat;
+        opt.textContent = cat;
+        categorySelect.appendChild(opt);
+      });
+    }
+
+    function addToCart(item) {
+      const existing = cart.find(i => i.Item === item.Item);
+      if (existing) existing.qty += 1;
+      else cart.push({ ...item, qty: 1 });
+      localStorage.setItem("cart", JSON.stringify(cart));
+      updateCartCount();
+      alert(`${item.Item} added to cart!`);
+    }
+
+    function renderMenu(data) {
+      menuContainer.innerHTML = "";
+      data.forEach(item => {
+        if (item.Available !== "TRUE") return;
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <img src="${item["Image URL"]}" alt="${item.Item}">
+          <div class="info">
+            <h2>${item.Item}</h2>
+            <div class="meta">${item.Qty} • ${item.Category}</div>
+            <div class="price">₹${item.Price}</div>
+            <button class="add-btn">Add to Cart</button>
+          </div>
+        `;
+        div.querySelector(".add-btn").onclick = () => addToCart(item);
+        menuContainer.appendChild(div);
+      });
+    }
+
+    categorySelect.addEventListener("change", () => {
+      const value = categorySelect.value;
+      if (value === "All") renderMenu(menuData);
+      else renderMenu(menuData.filter(i => i.Category === value));
+    });
+
+    loadMenu();
+  </script>
+<link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+<script type="module">
+	import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
+
+	createChat({
+		webhookUrl: 'https://n8n.srv1090344.hstgr.cloud/webhook/0c2f0e07-6b91-4321-ac27-3c4c585de382/chat'
+	});
+</script>
+</body>
+</html>
