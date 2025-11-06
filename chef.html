@@ -102,141 +102,143 @@
   <div id="ordersContainer">Loading orders...</div>
   <div id="toast" class="toast"></div>
 
-  <script>
-  const sheetId = "1mWGBvhWWcvxpwUfqzbWXTlAzWrNy9gUAFywC571rCZ0";
-  const n8nWebhook = "https://n8n.srv1090344.hstgr.cloud/webhook/udate-status";
-  const ordersContainer = document.getElementById("ordersContainer");
-  const toast = document.getElementById("toast");
+ <script>
+const sheetId = "1mWGBvhWWcvxpwUfqzbWXTlAzWrNy9gUAFywC571rCZ0";
+const n8nWebhook = "https://n8n.srv1090344.hstgr.cloud/webhook/udate-status";
+const ordersContainer = document.getElementById("ordersContainer");
+const toast = document.getElementById("toast");
 
-  let orders = [];
+let orders = [];
 
-  function showToast(msg) {
-    toast.innerText = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 2000);
-  }
+function showToast(msg) {
+  toast.innerText = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2000);
+}
 
-  async function fetchOrders() {
-    try {
-      const res = await fetch(`https://opensheet.elk.sh/${sheetId}/Orders`);
-      const data = await res.json();
-      orders = data.map(o => ({
-        id: o["order id"],
-        items: o["items"],
-        total: o["total"],
-        status: (o["status"] || "pending").toLowerCase(),
-        paid: (o["payment status"] || "").toLowerCase() === "paid"
-      }));
-      renderOrders();
-    } catch (err) {
-      console.error("Error fetching sheet:", err);
-      ordersContainer.innerHTML = "<p>Failed to load orders.</p>";
-    }
-  }
+async function fetchOrders() {
+  try {
+    const res = await fetch(`https://opensheet.elk.sh/${sheetId}/Orders`);
+    const data = await res.json();
 
-  async function sendUpdate(orderId, newStatus, paidValue) {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
+    console.log("✅ Orders fetched:", data); // <-- check console
 
-    // Construct unified payload
-    const payload = {
-      orderId: orderId,
-      status: newStatus ? newStatus : order.status,
-      paid: paidValue !== undefined ? (paidValue ? "Paid" : "") : (order.paid ? "Paid" : "")
-    };
+    // Map lowercase keys correctly
+    orders = data.map(o => ({
+      id: o["order id"] || o["Order ID"],
+      items: o["items"] || o["Items"],
+      total: o["total"] || o["Total"],
+      status: (o["status"] || o["Status"] || "pending").toLowerCase(),
+      paid: (o["payment status"] || o["Payment status"] || "").toLowerCase() === "paid"
+    }));
 
-    console.log("📦 Sending payload to webhook:", payload);
-
-    try {
-      const res = await fetch(n8nWebhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        // Update local state for smoother UI
-        if (newStatus) order.status = newStatus;
-        if (paidValue !== undefined) order.paid = paidValue;
-
-        renderOrders();
-        showToast(`Order ${orderId} updated → ${order.status}${order.paid ? " (Paid)" : ""}`);
-      } else {
-        showToast("Webhook update failed");
-      }
-    } catch (err) {
-      console.error("Webhook error:", err);
-      showToast("Network error");
-    }
-  }
-
-  function updateOrderStatus(orderId, status) {
-    // immediately disable button and update local state to avoid reverting
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    order.status = status;
     renderOrders();
-    sendUpdate(orderId, status);
+  } catch (err) {
+    console.error("❌ Error fetching sheet:", err);
+    ordersContainer.innerHTML = "<p>Failed to load orders.</p>";
   }
+}
 
-  function togglePaid(orderId, checked) {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
+async function sendUpdate(orderId, newStatus, paidValue) {
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
 
-    order.paid = checked;
-    renderOrders();
-    sendUpdate(orderId, null, checked);
-  }
+  const payload = {
+    orderId: orderId,
+    status: newStatus ? newStatus : order.status,
+    paid: paidValue !== undefined ? (paidValue ? "Paid" : "") : (order.paid ? "Paid" : "")
+  };
 
-  function renderOrders() {
-    ordersContainer.innerHTML = "";
-    if (!orders.length) {
-      ordersContainer.innerHTML = "<p>No orders found.</p>";
-      return;
-    }
+  console.log("📦 Sending payload to webhook:", payload);
 
-    orders.forEach(order => {
-      const card = document.createElement("div");
-      card.className = "order-card";
-
-      let buttonsHTML = "";
-      if (order.status === "pending") {
-        buttonsHTML = `<button class="accept-btn" onclick="updateOrderStatus('${order.id}','accepted')">Accept</button>`;
-      } else if (order.status === "accepted") {
-        buttonsHTML = `<button class="start-btn" onclick="updateOrderStatus('${order.id}','started')">Start Cooking</button>`;
-      } else if (order.status === "started") {
-        buttonsHTML = `<button class="complete-btn" onclick="updateOrderStatus('${order.id}','completed')">Completed</button>`;
-      } else if (order.status === "completed") {
-        buttonsHTML = `<button class="disabled-btn" disabled>Completed</button>`;
-      }
-
-      const paidToggle = `
-        <label class="switch">
-          <input type="checkbox" ${order.paid ? "checked" : ""} onchange="togglePaid('${order.id}', this.checked)">
-          <span class="slider"></span>
-        </label>
-      `;
-
-      card.innerHTML = `
-        <h3>Order ID: ${order.id}</h3>
-        <p><strong>Items:</strong> ${order.items}</p>
-        <p><strong>Total:</strong> ₹${order.total}</p>
-        <p><strong>Status:</strong> ${order.status}</p>
-        ${buttonsHTML}
-        <p><strong>Paid:</strong> ${paidToggle}</p>
-      `;
-
-      ordersContainer.appendChild(card);
+  try {
+    const res = await fetch(n8nWebhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
+
+    if (res.ok) {
+      if (newStatus) order.status = newStatus;
+      if (paidValue !== undefined) order.paid = paidValue;
+      renderOrders();
+      showToast(`Order ${orderId} updated → ${order.status}${order.paid ? " (Paid)" : ""}`);
+    } else {
+      showToast("Webhook update failed");
+    }
+  } catch (err) {
+    console.error("Webhook error:", err);
+    showToast("Network error");
+  }
+}
+
+function updateOrderStatus(orderId, status) {
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  order.status = status;
+  renderOrders();
+  sendUpdate(orderId, status);
+}
+
+function togglePaid(orderId, checked) {
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  order.paid = checked;
+  renderOrders();
+  sendUpdate(orderId, null, checked);
+}
+
+function renderOrders() {
+  ordersContainer.innerHTML = "";
+  if (!orders.length) {
+    ordersContainer.innerHTML = "<p>No orders found.</p>";
+    return;
   }
 
-  fetchOrders();
-  setInterval(fetchOrders, 10000);
+  orders.forEach(order => {
+    const card = document.createElement("div");
+    card.className = "order-card";
+
+    let buttonsHTML = "";
+    if (order.status === "pending") {
+      buttonsHTML = `<button class="accept-btn" onclick="updateOrderStatus('${order.id}','accepted')">Accept</button>`;
+    } else if (order.status === "accepted") {
+      buttonsHTML = `<button class="start-btn" onclick="updateOrderStatus('${order.id}','started')">Start Cooking</button>`;
+    } else if (order.status === "started") {
+      buttonsHTML = `<button class="complete-btn" onclick="updateOrderStatus('${order.id}','completed')">Completed</button>`;
+    } else if (order.status === "completed") {
+      buttonsHTML = `<button class="disabled-btn" disabled>Completed</button>`;
+    }
+
+    const paidToggle = `
+      <label class="switch">
+        <input type="checkbox" ${order.paid ? "checked" : ""} onchange="togglePaid('${order.id}', this.checked)">
+        <span class="slider"></span>
+      </label>
+    `;
+
+    card.innerHTML = `
+      <h3>Order ID: ${order.id}</h3>
+      <p><strong>Items:</strong> ${order.items}</p>
+      <p><strong>Total:</strong> ₹${order.total}</p>
+      <p><strong>Status:</strong> ${order.status}</p>
+      ${buttonsHTML}
+      <p><strong>Paid:</strong> ${paidToggle}</p>
+    `;
+
+    ordersContainer.appendChild(card);
+  });
+}
+
+fetchOrders();
+setInterval(fetchOrders, 10000);
 
 window.updateOrderStatus = updateOrderStatus;
 window.togglePaid = togglePaid;
 </script>
+
 
 
 </body>
