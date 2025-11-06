@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Cart</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>Your Cart 🛒</h1>
+  <a href="menu.html" class="back-link">← Back to Menu</a>
+
+  <div class="cart-container">
+    <div id="cartItems"></div>
+    <div id="cartTotal" class="cart-total"></div>
+    <button id="checkoutBtn" class="checkout-btn">Proceed to Checkout ➜</button>
+  </div>
+
+  <script>
+    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+
+    function renderCart() {
+      const container = document.getElementById("cartItems");
+      const totalContainer = document.getElementById("cartTotal");
+
+      if (!cart.length) {
+        container.innerHTML = "<p>Your cart is empty.</p>";
+        document.getElementById("checkoutBtn").style.display = "none";
+        return;
+      }
+
+      let total = 0;
+      let html = "<table><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr>";
+      cart.forEach((item, index) => {
+        const subtotal = item.qty * parseFloat(item.Price);
+        total += subtotal;
+        html += `
+          <tr>
+            <td>${item.Item}</td>
+            <td>
+              <button onclick="updateQty(${index}, -1)">-</button>
+              ${item.qty}
+              <button onclick="updateQty(${index}, 1)">+</button>
+            </td>
+            <td>₹${item.Price}</td>
+            <td>₹${subtotal}</td>
+            <td><button onclick="removeItem(${index})">❌</button></td>
+          </tr>
+        `;
+      });
+      html += "</table>";
+
+      container.innerHTML = html;
+      totalContainer.innerHTML = `<h2>Total: ₹${total}</h2>`;
+    }
+
+    function updateQty(index, change) {
+      cart[index].qty += change;
+      if (cart[index].qty <= 0) cart.splice(index, 1);
+      localStorage.setItem("cart", JSON.stringify(cart));
+      renderCart();
+    }
+
+    function removeItem(index) {
+      cart.splice(index, 1);
+      localStorage.setItem("cart", JSON.stringify(cart));
+      renderCart();
+    }
+
+    document.getElementById("checkoutBtn").addEventListener("click", () => {
+      if (!cart.length) {
+        alert("Your cart is empty!");
+        return;
+      }
+      window.location.href = "checkout.html";
+    });
+
+    renderCart();
+  </script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f9fafb;
+      margin: 0;
+      padding: 20px;
+    }
+    .cart-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #eee;
+      text-align: center;
+    }
+    th {
+      background: #f1f1f1;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .checkout-btn {
+      display: block;
+      width: 100%;
+      background: #28a745;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 18px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .checkout-btn:hover {
+      background: #218838;
+    }
+    .back-link {
+      text-decoration: none;
+      color: #007bff;
+      font-size: 16px;
+    }
+    .cart-total {
+      text-align: right;
+      margin-top: 10px;
+      font-size: 18px;
+    }
+  </style>
+</body>
+</html>
