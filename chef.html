@@ -121,11 +121,11 @@
       const res = await fetch(`https://opensheet.elk.sh/${sheetId}/Orders`);
       const data = await res.json();
       orders = data.map(o => ({
-        id: o["Order ID"],
-        items: o["Items"],
-        total: o["Total"],
-        status: (o["Status"] || "pending").toLowerCase(),
-        paid: (o["Payment status"] || "").toLowerCase() === "paid"
+        id: o["order id"],
+        items: o["items"],
+        total: o["total"],
+        status: (o["status"] || "pending").toLowerCase(),
+        paid: (o["payment status"] || "").toLowerCase() === "paid"
       }));
       renderOrders();
     } catch (err) {
