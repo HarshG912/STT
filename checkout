@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Checkout | UPI Payment</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+  <h1>Checkout 🧾</h1>
+  <a href="cart.html" class="back-link">← Back to Cart</a>
+
+  <div class="checkout-container">
+    <div id="orderSummary" class="order-summary"></div>
+    <div id="qrSection" class="qr-section">
+      <h2>Scan to Pay</h2>
+      <div id="qrcode"></div>
+      <p id="upiText" class="upi-text"></p>
+      <button id="confirmBtn" class="confirm-btn">I’ve Paid ✅</button>
+    </div>
+  </div>
+
+  <script>
+    const MERCHANT_UPI = "8928836705@ybl";
+    let cart = JSON.parse(localStorage.getItem("cart") || "[]");
+
+    function calcTotal() {
+      return cart.reduce((sum, item) => sum + item.qty * parseFloat(item.Price), 0);
+    }
+
+    function renderSummary() {
+      const container = document.getElementById("orderSummary");
+      if (!cart.length) {
+        container.innerHTML = "<p>Your cart is empty.</p>";
+        document.getElementById("qrSection").style.display = "none";
+        return;
+      }
+
+      let html = "<h2>Order Summary</h2><ul>";
+      cart.forEach(i => {
+        html += `<li>${i.Item} × ${i.qty} = ₹${i.qty * parseFloat(i.Price)}</li>`;
+      });
+      const total = calcTotal();
+      html += `</ul><h3>Total: ₹${total}</h3>`;
+      container.innerHTML = html;
+
+      generateQR(total);
+    }
+
+    function generateQR(amount) {
+      const upiLink = `upi://pay?pa=${encodeURIComponent(MERCHANT_UPI)}&pn=${encodeURIComponent("Restaurant")}&am=${amount}&cu=INR`;
+      document.getElementById("upiText").innerHTML = `<b>UPI ID:</b> ${MERCHANT_UPI}<br><b>Amount:</b> ₹${amount}`;
+      new QRCode(document.getElementById("qrcode"), {
+        text: upiLink,
+        width: 200,
+        height: 200,
+      });
+    }
+
+    document.getElementById("confirmBtn").addEventListener("click", async () => {
+  const orderId = "ORD" + Date.now();
+  const total = calcTotal();
+  const items = cart.map(i => `${i.Item} x${i.qty}`).join(", ");
+
+  const orderData = {
+    orderId,
+    items,
+    total,
+    status: "Pending",
+    timestamp: new Date().toISOString()
+  };
+
+  // send to n8n webhook
+  await fetch("https://n8n.srv1090344.hstgr.cloud/webhook/place-order", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(orderData)
+  });
+
+  alert("✅ Order sent to kitchen! Thank you for your payment.");
+  localStorage.removeItem("cart");
+  window.location.href = "menu.html";
+});
+
+
+    renderSummary();
+  </script>
+
+  <style>
+    .checkout-container {
+      max-width: 500px;
+      margin: 30px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 14px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    .order-summary ul {
+      list-style: none;
+      padding: 0;
+    }
+    .order-summary li {
+      margin: 5px 0;
+      color: #333;
+    }
+    #qrcode {
+      margin: 20px auto;
+      width: fit-content;
+    }
+    .upi-text {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+    .confirm-btn {
+      background: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 15px;
+    }
+    .confirm-btn:hover {
+      background: #1f883d;
+    }
+  </style>
+</body>
+</html>
